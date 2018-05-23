@@ -1,0 +1,73 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Parameters:
+  myKeypair:
+    Type: 'String'
+  DatabasePassword:
+    NoEcho: 'true'
+    Type: "String"
+    Description: "Database admin account password"
+    MinLength: '8'
+    MaxLength: '41'
+    AllowedPattern: "[a-zA-Z0-9]*"
+    ConstraintDescription: "Password must contain only alphanumeric characters."    
+Resources:
+  mySecGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Opening up HTTP and SSH port.
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '5000'
+        ToPort: '5000'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: '22'
+        ToPort: '22'
+        CidrIp: 0.0.0.0/0
+  myDBSG:
+    Type: AWS::RDS::DBSecurityGroup
+    Properties:
+      GroupDescription: Security Group for RDS public access
+      DBSecurityGroupIngress:
+        - CIDRIP: 0.0.0.0/0        
+  myDBInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBName: "reports"
+      Engine: MySQL
+      MultiAZ: true
+      MasterUsername: root
+      MasterUserPassword: !Ref DatabasePassword
+      DBInstanceClass: db.t2.micro
+      AllocatedStorage: '20'
+      DBSecurityGroups:
+        - !Ref myDBSG
+  myInstance1:
+    Type: 'AWS::EC2::instance'
+    Properties:
+      ImageId: ami-b5ed9ccd
+      InstanceType: t2.micro
+      KeyName: !Ref myKeypair
+      SecurityGroups:
+        - !Ref mySecGroup
+      UserData: !Base64 |
+        #!/bin/bash
+        apt-get update
+        apt-get install python -y
+        apt-get install build-essential libssl-dev -y
+        #echo 'mysql-server mysql-server/root_password_again password root' | debconf-set-selections
+        #echo 'mysql-server mysql-server/root_password password root' | debconf-set-selections
+        apt-get install mysql-client -y
+        wget https://bootstrap.pypa.io/get-pip.py
+        python get-pip.py
+        #if python version>=2.7.9, then proceed
+        pip install virtualenv
+        mkdir webserver
+        cd webserver
+        git clone https://github.com/harshitshah65/app-db-cloudformation.git 
+        virtualenv venv
+        source venv/bin/activate
+        pip install -r /home/ubuntu/webserver/app-db-cloudformation/requirements.txt
+        mysql -uroot -p'!Ref DatabasePassword' -h'Fn::GetAtt: [ "myDBInstance", "Endpoint.Address" ]' -e "create database reports;"
+        mysql -uroot -p'!Ref DatabasePassword' -h'Fn::GetAtt: [ "myDBInstance", "Endpoint.Address" ]' reports < /home/ubuntu/webserver/app-db-cloudformation/dump.sql
