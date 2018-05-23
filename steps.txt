@@ -1,0 +1,13 @@
+apt-get update -y
+apt-get install python -y
+apt-get install build-essential libssl-dev -y
+apt-get install git
+wget https://bootstrap.pypa.io/get-pip.py
+python get-pip.py
+#if python version>=2.7.9, then proceed
+pip install virtualenv
+mkdir webserver
+cd webserver
+virtualenv venv
+pip install -r requirements.txt
+
